@@ -30,14 +30,22 @@ dificuldade, de "Iniciante da casa" a "Mestre da Meta Alvo".
 
 ### Configurar o login
 
-```bash
-cp .env.example .env
-# preencha VITE_GOOGLE_CLIENT_ID e reinicie o npm run dev
-```
+O `.env` já vem no repositório com o Client ID preenchido, então clonar e rodar
+`npm install && npm run dev` é suficiente. O passo a passo para gerar outro
+Client ID, se precisar, está dentro do `.env.example`.
 
-O passo a passo para gerar o Client ID está dentro do `.env.example`. Enquanto
-a chave não existir, a tela de entrada mostra as instruções em vez de um botão
-quebrado, e o "Jogar sem conta" continua funcionando.
+Enquanto a chave não existir, a tela de entrada mostra as instruções em vez de
+um botão quebrado, e o "Jogar sem conta" continua funcionando.
+
+**Por que o `.env` está versionado.** O Client ID do Google não é segredo: ele é
+embutido no JavaScript que todo visitante baixa, então esconder não protegeria
+nada. Quem protege a chave é a lista de *Origens JavaScript autorizadas* no
+Google Cloud Console, que só deixa o login funcionar a partir dos endereços que
+você cadastrar. Ao publicar em produção, lembre de adicionar o domínio novo lá,
+senão o botão do Google para de funcionar.
+
+Isso vale só para valores públicos. Chave de API, client secret ou token vão em
+`.env.local`, que continua no `.gitignore`. É a convenção do próprio Vite.
 
 ### Um aviso honesto sobre a etiqueta
 

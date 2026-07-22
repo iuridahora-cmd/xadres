@@ -18,6 +18,9 @@ yarn-error.log*
 *.log
 
 # variáveis de ambiente
-.env
+# O .env vai para o repositório de propósito: ele só guarda valores públicos,
+# como o Client ID do Google, que já viaja dentro do JavaScript entregue ao
+# navegador. Qualquer coisa realmente secreta (chave de API, client secret,
+# token) vai em .env.local, que fica de fora.
 .env.local
 .env.*.local
