@@ -13,6 +13,45 @@ npm run build    # gera dist/
 npm run preview  # serve o build
 ```
 
+## Conta, perfil e etiqueta
+
+Entrar com o Google é opcional: dá para jogar como convidado, e nesse caso o
+progresso fica salvo só naquele navegador.
+
+Quem entra com e-mail do domínio `metaalvo.com` recebe a etiqueta dourada
+**META PLAYER**. Qualquer outra conta recebe **NORMAL PLAYER**. A regra está em
+`src/game/perfil.js`, na função `etiquetaDe`, e olha tanto o final do e-mail
+quanto o campo `hd` que o Google Workspace envia.
+
+O perfil guarda partidas, vitórias, empates, derrotas, aproveitamento, precisão
+média, melhor partida, melhor sequência e o desempenho separado por
+dificuldade. Existe também uma patente que sobe com vitórias pesadas pela
+dificuldade, de "Iniciante da casa" a "Mestre da Meta Alvo".
+
+### Configurar o login
+
+```bash
+cp .env.example .env
+# preencha VITE_GOOGLE_CLIENT_ID e reinicie o npm run dev
+```
+
+O passo a passo para gerar o Client ID está dentro do `.env.example`. Enquanto
+a chave não existir, a tela de entrada mostra as instruções em vez de um botão
+quebrado, e o "Jogar sem conta" continua funcionando.
+
+### Um aviso honesto sobre a etiqueta
+
+O login roda inteiro no navegador. O app lê o conteúdo do token que o Google
+devolve para montar o perfil, mas **não confere a assinatura dele**, porque isso
+exige um servidor. Na prática: a etiqueta é enfeite, não credencial. Quem abrir
+o console e editar o `localStorage` consegue se dar META PLAYER.
+
+Isso é aceitável enquanto a etiqueta for cosmética. No dia em que ela valer algo
+de verdade (ranking oficial, prêmio, acesso a alguma coisa), vai precisar de um
+backend que receba o token, valide a assinatura contra as chaves públicas do
+Google, confirme o `aud` e o `hd`, e só então grave o resultado. Está anotado
+como próximo passo mais abaixo.
+
 ## O que tem
 
 **Três dificuldades.** Trocar de nível começa uma partida nova.
@@ -148,3 +187,29 @@ própria.
 Fundo escuro `#0d0618`, roxos `#7c3aed` e `#a855f7`, lilás `#c9b6ff` e dourado
 champanhe `#e7c98a`. As peças brancas são douradas e as pretas, ametista.
 Nenhum arquivo de imagem: as peças são SVG desenhado no próprio projeto.
+
+## Próximos passos sugeridos
+
+Levantamento do que ainda separa isso de um produto acabado, em ordem de
+impacto:
+
+1. **Validar o login no servidor.** Enquanto não houver backend conferindo a
+   assinatura do token do Google, a etiqueta META PLAYER é decorativa.
+2. **Ranking entre colegas.** Só faz sentido depois do item 1, senão qualquer um
+   forja a pontuação. Um endpoint simples com Firebase ou Supabase resolve.
+3. **Puzzles táticos.** O motor já sabe achar o melhor lance e medir perda de
+   material; falta uma base de posições e a tela de "ache o lance".
+4. **Layout de celular com abas.** Hoje a coluna da direita empilha embaixo do
+   tabuleiro e fica comprida. Abas (Análise, Jogadas, Histórico) resolveriam.
+5. **PWA instalável.** Manifesto e service worker para abrir como aplicativo e
+   funcionar sem internet, que o motor já permite por rodar local.
+6. **Cartão de resultado para compartilhar.** Uma imagem com placar, precisão e
+   a etiqueta, no visual da marca.
+7. **Análise da partida inteira de uma vez.** Hoje cada lance é analisado no
+   momento em que acontece; um botão "analisar tudo" reprocessaria a partida
+   importada por PGN.
+8. **Importar PGN e FEN.** Já dá para exportar; falta o caminho inverso para
+   estudar posições de fora.
+9. **Escolha de conjunto de peças.** Hoje há um só, desenhado no projeto.
+10. **Traduzir os textos.** A estrutura já separa o conteúdo em português dos
+    componentes, então adicionar inglês é mecânico.

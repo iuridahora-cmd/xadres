@@ -3,7 +3,6 @@ import { Chess } from 'chess.js'
 import Tabuleiro from './components/Tabuleiro.jsx'
 import { DefsPecas } from './components/Pecas.jsx'
 import {
-  Ajustes,
   BarraAvaliacao,
   Cabecalho,
   Capturadas,
@@ -16,6 +15,16 @@ import {
   SeletorNivel,
 } from './components/Paineis.jsx'
 import { GraficoAvaliacao, Relatorio, Relogio } from './components/Relatorio.jsx'
+import Configuracoes from './components/Configuracoes.jsx'
+import Avisos from './components/Avisos.jsx'
+import { ChipPerfil, ModalLogin, ModalPerfil } from './components/Conta.jsx'
+import {
+  etiquetaDe,
+  lerEstatisticas,
+  lerPerfil,
+  registrarPartida,
+  salvarPerfil,
+} from './game/perfil.js'
 import { useEngine } from './hooks/useEngine.js'
 import { ANALISE, ANALISE_RAPIDA } from './engine/levels.js'
 import {
@@ -219,6 +228,8 @@ function lerPreferencias() {
     coordenadas: true,
     treino: false,
     tempo: 'sem',
+    velocidade: 'normal',
+    tamanho: 'normal',
     pgn: null,
   }
   try {
@@ -264,6 +275,15 @@ export default function App() {
   const [coordenadas, setCoordenadas] = useState(prefsIniciais.coordenadas)
   const [treino, setTreino] = useState(prefsIniciais.treino)
   const [tempoId, setTempoId] = useState(prefsIniciais.tempo)
+  const [velocidade, setVelocidade] = useState(prefsIniciais.velocidade)
+  const [tamanhoTabuleiro, setTamanhoTabuleiro] = useState(prefsIniciais.tamanho)
+
+  const [perfil, setPerfil] = useState(() => lerPerfil())
+  const [estatisticas, setEstatisticas] = useState(() => lerEstatisticas(lerPerfil()?.id))
+  const [modalLogin, setModalLogin] = useState(() => !lerPerfil())
+  const [modalPerfil, setModalPerfil] = useState(false)
+  const [modalConfig, setModalConfig] = useState(false)
+  const [avisos, setAvisos] = useState([])
 
   const [selecionada, setSelecionada] = useState(null)
   const [promocao, setPromocao] = useState(null)
@@ -282,10 +302,19 @@ export default function App() {
   const [desistiu, setDesistiu] = useState(false)
   const [fimPorTempo, setFimPorTempo] = useState(null)
   const [relogio, setRelogio] = useState(() => relogioDe(prefsIniciais.tempo))
-  const [avisoCopia, setAvisoCopia] = useState(null)
 
   const fenDespachada = useRef(null)
   const ultimoTique = useRef(null)
+  const partidaContabilizada = useRef(null)
+
+  const avisar = useCallback((texto, tipo = 'info') => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    setAvisos((lista) => [...lista.slice(-2), { id, texto, tipo }])
+  }, [])
+
+  const fecharAviso = useCallback((id) => {
+    setAvisos((lista) => lista.filter((a) => a.id !== id))
+  }, [])
 
   const tocar = useCallback(
     (nome) => {
@@ -315,6 +344,8 @@ export default function App() {
       coordenadas,
       treino,
       tempo: tempoId,
+      velocidade,
+      tamanho: tamanhoTabuleiro,
       pgn: lances.length && !encerrada ? jogo.current.pgn() : null,
     }
     try {
@@ -322,7 +353,7 @@ export default function App() {
     } catch {
       /* modo anônimo, sem espaço, tudo bem */
     }
-  }, [nivel, corJogador, somLigado, tema, coordenadas, treino, tempoId, lances.length, encerrada])
+  }, [nivel, corJogador, somLigado, tema, coordenadas, treino, tempoId, velocidade, tamanhoTabuleiro, lances.length, encerrada])
 
   // retoma a partida que ficou aberta na última visita
   const retomou = useRef(false)
@@ -355,7 +386,9 @@ export default function App() {
 
   useEffect(() => {
     document.body.dataset.tema = tema
-  }, [tema])
+    document.body.dataset.velocidade = velocidade
+    document.body.dataset.tamanho = tamanhoTabuleiro
+  }, [tema, velocidade, tamanhoTabuleiro])
 
   /* -------------------------------------------------------------- */
   /* Relógio                                                         */
@@ -997,12 +1030,60 @@ export default function App() {
     const texto = cabecalho + jogo.current.pgn()
     try {
       await navigator.clipboard.writeText(texto)
-      setAvisoCopia('PGN copiado')
+      avisar('PGN copiado para a área de transferência', 'ok')
     } catch {
-      setAvisoCopia('não deu para copiar')
+      avisar('O navegador bloqueou a cópia. Selecione o texto manualmente.', 'erro')
     }
-    setTimeout(() => setAvisoCopia(null), 2200)
   }
+
+  // contabiliza a partida encerrada uma única vez
+  useEffect(() => {
+    if (!resultado) return
+    const assinatura = `${jogo.current.fen()}|${lances.length}|${resultado.titulo}`
+    if (partidaContabilizada.current === assinatura) return
+    partidaContabilizada.current = assinatura
+    const empate = resultado.titulo.toLowerCase().startsWith('empate')
+    const desfecho = empate ? 'empate' : resultado.vitoria ? 'vitoria' : 'derrota'
+    const brilhantes = lances.filter((l) => l.cor === corJogador && l.veredito?.chave === 'brilhante').length
+    const atualizado = registrarPartida(perfil?.id, {
+      desfecho,
+      nivel,
+      precisao: resumo.precisao.jogador,
+      brilhantes,
+    })
+    setEstatisticas(atualizado)
+    if (desfecho === 'vitoria') avisar('Vitória registrada no seu perfil', 'ok')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultado])
+
+  /* -------------------------------------------------------------- */
+  /* Conta                                                           */
+  /* -------------------------------------------------------------- */
+
+  const entrarCom = useCallback(
+    (novo) => {
+      setPerfil(novo)
+      salvarPerfil(novo)
+      setEstatisticas(lerEstatisticas(novo.id))
+      setModalLogin(false)
+      const etiqueta = etiquetaDe(novo)
+      avisar(
+        novo.convidado
+          ? 'Jogando como convidado. O progresso fica só neste navegador.'
+          : `Bem-vindo, ${novo.nome.split(' ')[0]}. Etiqueta ${etiqueta.rotulo}.`,
+        'ok',
+      )
+    },
+    [avisar],
+  )
+
+  const sairDaConta = useCallback(() => {
+    setPerfil(null)
+    salvarPerfil(null)
+    setEstatisticas(lerEstatisticas(null))
+    setModalPerfil(false)
+    setModalLogin(true)
+  }, [])
 
   /* -------------------------------------------------------------- */
   /* Teclado                                                         */
@@ -1093,7 +1174,22 @@ export default function App() {
     <div className="app">
       <DefsPecas />
       <div className="brilho-fundo" aria-hidden="true" />
-      <Cabecalho abertura={abertura} />
+      <Cabecalho
+        abertura={abertura}
+        acoes={
+          <>
+            <button
+              className="botao-icone"
+              onClick={() => setModalConfig(true)}
+              title="Configurações"
+              aria-label="Abrir configurações"
+            >
+              ⚙
+            </button>
+            <ChipPerfil perfil={perfil} onAbrir={() => (perfil ? setModalPerfil(true) : setModalLogin(true))} />
+          </>
+        }
+      />
 
       <main className="palco">
         <section className="coluna-tabuleiro">
@@ -1297,23 +1393,7 @@ export default function App() {
 
           <Relatorio resumo={resumo} />
 
-          <Ajustes
-            corJogador={corJogador}
-            onCor={(c) => novaPartida(c)}
-            tempoId={tempoId}
-            onTempo={(t) => novaPartida(corJogador, nivel, t)}
-            tema={tema}
-            onTema={setTema}
-            coordenadas={coordenadas}
-            onCoordenadas={setCoordenadas}
-            treino={treino}
-            onTreino={setTreino}
-            som={somLigado}
-            onSom={setSomLigado}
-            onCopiarPgn={copiarPgn}
-            avisoCopia={avisoCopia}
-            temLances={!!lances.length}
-          />
+
         </aside>
       </main>
 
@@ -1328,6 +1408,52 @@ export default function App() {
           }}
         />
       )}
+
+      <Configuracoes
+        aberto={modalConfig}
+        onFechar={() => setModalConfig(false)}
+        nivel={nivel}
+        onNivel={(n) => novaPartida(corJogador, n)}
+        corJogador={corJogador}
+        onCor={(c) => novaPartida(c)}
+        tempoId={tempoId}
+        onTempo={(t) => novaPartida(corJogador, nivel, t)}
+        tema={tema}
+        onTema={setTema}
+        coordenadas={coordenadas}
+        onCoordenadas={setCoordenadas}
+        treino={treino}
+        onTreino={setTreino}
+        som={somLigado}
+        onSom={setSomLigado}
+        velocidade={velocidade}
+        onVelocidade={setVelocidade}
+        tamanhoTabuleiro={tamanhoTabuleiro}
+        onTamanhoTabuleiro={setTamanhoTabuleiro}
+        onCopiarPgn={copiarPgn}
+        temLances={!!lances.length}
+      />
+
+      <ModalLogin
+        aberto={modalLogin}
+        onPerfil={entrarCom}
+        onConvidado={entrarCom}
+        onFechar={() => perfil && setModalLogin(false)}
+      />
+
+      <ModalPerfil
+        aberto={modalPerfil}
+        perfil={perfil}
+        estatisticas={estatisticas}
+        onFechar={() => setModalPerfil(false)}
+        onSair={sairDaConta}
+        onTrocarConta={() => {
+          setModalPerfil(false)
+          setModalLogin(true)
+        }}
+      />
+
+      <Avisos avisos={avisos} onFechar={fecharAviso} />
 
       <FimDeJogo resultado={resultado} resumo={resumo} onNovaPartida={() => novaPartida()} onRevisar={() => irParaLance(1)} />
 

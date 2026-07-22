@@ -4,9 +4,10 @@ import { TEMAS, TEMPOS } from '../game/opcoes.js'
 import { Relatorio } from './Relatorio.jsx'
 import { Peca } from './Pecas.jsx'
 
-export function Cabecalho({ abertura }) {
+export function Cabecalho({ abertura, acoes }) {
   return (
     <header className="cabecalho">
+      {acoes && <div className="acoes-topo">{acoes}</div>}
       <div className="marca">
         <span className="marca-alvo" aria-hidden="true">
           <span className="anel" />
